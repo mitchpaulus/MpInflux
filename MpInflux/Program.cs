@@ -35,7 +35,7 @@ public class Program
         var startDate = DateTime.Parse(lines[1].Trim());
         var endDate = DateTime.Parse(lines[2].Trim());
         var intervalMinutes = int.Parse(lines[3].Trim());
-        var trends = lines[4..].Where(s => s.Length > 0).ToList();
+        var trends = lines[4..].Where(s => s.Trim().Length > 0).ToList();
 
         // Get Environment Variables for INFLUX_HOST and INFLUX_TOKEN
         var influxHost = Environment.GetEnvironmentVariable("INFLUX_HOST");
@@ -118,6 +118,10 @@ public class Program
                 if (success && value is double doubleVal)
                 {
                     builder.Append($"\t{doubleVal}");
+                }
+                else
+                {
+                    builder.Append('\t');
                 }
             }
 
