@@ -22,15 +22,22 @@ public class Program
         }
 
         (string output, bool success) = await GetOutput(inputText);
-        
+
         Console.Write(output);
-        
+
         return success ? 0 : 1;
     }
 
     public static async Task<(string, bool)> GetOutput(string inputText)
     {
         var lines = inputText.Split('\n');
+
+        if (lines.Length < 5)
+        {
+            await Console.Error.WriteLineAsync("Input file must have at least 5 lines.");
+            return ("", false);
+        }
+
         var bucket = lines[0].Trim();
         var startDate = DateTime.Parse(lines[1].Trim());
         var endDate = DateTime.Parse(lines[2].Trim());
@@ -58,7 +65,7 @@ public class Program
             await Console.Error.WriteLineAsync("INFLUX_ORG or INFLUX_ORG_ID environment variable not found.");
             return ("", false);
         }
-        
+
         // Connect to InfluxDB
         using var client = new InfluxDBClient(influxHost, influxToken);
         var queryApi = client.GetQueryApi();
@@ -76,7 +83,7 @@ public class Program
         string currentMeasurement = "";
 
         long ticks = (TimeSpan.TicksPerMinute * intervalMinutes);
-        
+
         foreach (var fluxTable in fluxTables)
         {
             foreach (var fluxRecord in fluxTable.Records)
@@ -86,10 +93,10 @@ public class Program
                 DateTime time = instant.Value.ToDateTimeUtc();
 
                 DateTime truncatedTime = new DateTime(time.Ticks / ticks * ticks);
-                
+
                 var value = fluxRecord.GetValue();
                 var measurement = fluxRecord.GetMeasurement();
-                if (measurement != currentMeasurement) 
+                if (measurement != currentMeasurement)
                 {
                     data.Add(measurement, new Dictionary<DateTime, object>());
                     currentMeasurement = measurement;
@@ -108,7 +115,7 @@ public class Program
         builder.Append("DateTime");
         foreach (var t in sortedTrends) builder.Append($"\t{t}");
         builder.Append('\n');
-        
+
         while (current < endDate)
         {
             builder.Append($"{current:yyyy-MM-dd HH:mm}");
