@@ -9,7 +9,23 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Any(s => s == "--help" || s == "-h"))
+        {
+            Console.Write("MpInflux < FILE\n");
+            Console.Write("\n");
+            Console.Write("File Format:\n");
+            Console.Write("Bucket\n");
+            Console.Write("Start Date (YYYY-MM-DD)\n");
+            Console.Write("End Date (YYYY-MM-DD)\n");
+            Console.Write("Interval (min)\n");
+            Console.Write("Trend Name 1\n");
+            Console.Write("Trend Name 2\n");
+            Console.Write("...\n");
+            return 0;
+        }
+
         string inputText;
+
         if (args.Length > 0)
         {
             // Read input from file
