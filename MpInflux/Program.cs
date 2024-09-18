@@ -15,12 +15,15 @@ public class Program
             Console.Write("\n");
             Console.Write("File Format:\n");
             Console.Write("Bucket\n");
-            Console.Write("Start Date (YYYY-MM-DD)\n");
-            Console.Write("End Date (YYYY-MM-DD)\n");
+            Console.Write("Start Date (YYYY-MM-DD), inclusive\n");
+            Console.Write("End Date (YYYY-MM-DD), exclusive\n");
             Console.Write("Interval (min)\n");
             Console.Write("Trend Name 1\n");
             Console.Write("Trend Name 2\n");
             Console.Write("...\n");
+            Console.Write("\n");
+            Console.Write("This utilizes a simple walk-back alignment algorithm.\n");
+
             return 0;
         }
 
@@ -87,38 +90,43 @@ public class Program
         var queryApi = client.GetQueryApi();
 
         List<string> outLines = new();
-
-        string orStatement = string.Join(" or ", trends.Select(s => $"r._measurement == \"{s}\""));
-
-        // Generate query based on input and alignment
-        var query = $"from(bucket: \"{bucket}\") |> range(start: {startDate:yyyy-MM-dd}, stop: {endDate:yyyy-MM-dd}) |> filter(fn: (r) => {orStatement})";
-        List<FluxTable> fluxTables = await queryApi.QueryAsync(query, org);
-
+        var batchedTrends = trends.Batch(5);
         Dictionary<string, Dictionary<DateTime, object>> data = new();
 
-        string currentMeasurement = "";
-
-        long ticks = (TimeSpan.TicksPerMinute * intervalMinutes);
-
-        foreach (var fluxTable in fluxTables)
+        foreach (var trendBatch in batchedTrends)
         {
-            foreach (var fluxRecord in fluxTable.Records)
+            string orStatement = string.Join(" or ", trendBatch.Select(s => $"r._measurement == \"{s}\""));
+
+            // Generate query based on input and alignment
+            var query = $"from(bucket: \"{bucket}\") |> range(start: {startDate:yyyy-MM-dd}, stop: {endDate:yyyy-MM-dd}) |> filter(fn: (r) => {orStatement})";
+            List<FluxTable> fluxTables = await queryApi.QueryAsync(query, org);
+            string currentMeasurement = "";
+
+            long ticks = (TimeSpan.TicksPerMinute * intervalMinutes);
+
+            foreach (var fluxTable in fluxTables)
             {
-                var instant = fluxRecord.GetTime();
-                if (instant is null) continue;
-                DateTime time = instant.Value.ToDateTimeUtc();
-
-                DateTime truncatedTime = new DateTime(time.Ticks / ticks * ticks);
-
-                var value = fluxRecord.GetValue();
-                var measurement = fluxRecord.GetMeasurement();
-                if (measurement != currentMeasurement)
+                foreach (var fluxRecord in fluxTable.Records)
                 {
-                    data.Add(measurement, new Dictionary<DateTime, object>());
-                    currentMeasurement = measurement;
-                }
+                    var instant = fluxRecord.GetTime();
+                    if (instant is null) continue;
+                    DateTime time = instant.Value.ToDateTimeUtc();
 
-                data[measurement].TryAdd(truncatedTime, value);
+                    DateTime truncatedTime = new DateTime(time.Ticks / ticks * ticks);
+
+                    var value = fluxRecord.GetValue();
+                    var measurement = fluxRecord.GetMeasurement();
+                    if (measurement != currentMeasurement)
+                    {
+                        if (!data.ContainsKey(measurement))
+                        {
+                            data.Add(measurement, new Dictionary<DateTime, object>());
+                        }
+                        currentMeasurement = measurement;
+                    }
+
+                    data[measurement].TryAdd(truncatedTime, value);
+                }
             }
         }
 
